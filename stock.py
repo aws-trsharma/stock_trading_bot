@@ -3,10 +3,18 @@ import yfinance as yf
 from yfinance import Ticker
 from datetime import date, timedelta, datetime
 
+# rule_prototyping notebook explains the logic here
+def get_intersect(diff_hist):
+    diff_group = (diff_hist['index'] != diff_hist.shift()['index']+ 1).cumsum().rename('group')
+    return diff_hist.groupby([diff_group], as_index=False).first()
 
+# get the name to store the sma intersect data
+def get_sma_x_name(sma_pair, direction):
+    return f'X_SMA_{sma_pair[0]}_{sma_pair[1]}_{direction}'
 
 
 class Stock:
+
     def __init__(self, ticker, num_stock = 10, time_period='12mo', period_int = 5):
         self.stock = Ticker(ticker)
         self.hist = self.stock.history(time_period)
@@ -37,8 +45,6 @@ class Stock:
             print("not enough stocks available")
             return False
 
-            
-    
     def get_percent_change(self):
         today = datetime.utcnow() - timedelta(1) 
         today_str = today.strftime("%Y-%m-%d")
@@ -76,6 +82,48 @@ class Stock:
         short_ma = price_hist.iloc[-1].loc['SMA_50']
         long_ma = price_hist.iloc[-1].loc['SMA_200']    
         return (short_ma, long_ma)
+
+    def get_sma_(self, t=50):
+        sma_col_name = 'SMA_' + str(t)
+        if sma_col_name not in self.stock_data.columns:
+            self.stock_data[sma_col_name] = self.stock_data.Close.rolling(t).mean()
+            print(f'Got {t} day SMA.')
+        else:
+            print(f'I already have {t} day SMA.')
+
+    def get_cma_(self):
+        cma_col_name = 'CMA'
+        if cma_col_name not in self.stock_data.columns:
+            self.stock_data[cma_col_name] = self.stock_data.Close.expanding().mean()
+            print(f'Got  CMA.')
+        else:
+            print(f'I already have CMA.')
+
+    def get_ema_(self, t=50):
+        ema_col_name = 'EMA_' + str(t)
+        if ema_col_name not in self.stock_data.columns:
+            self.stock_data[ema_col_name] = self.stock_data.Close.ewm(span=t).mean()
+            print(f'Got {t} day EMA.')
+        else:
+            print(f'I already have {t} day EMA.')
+
+    def get_intersects(self, one):
+        pass
+#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
+    def get_sma_xs_(self, sma_pair, direction):
+        sma_x_name = get_sma_x_name(sma_pair, direction)
+        if not self.sma_xs.get(sma_x_name):
+            print(f'Getting {sma_x_name} intersects')
+            for sma_period in sma_pair:
+                self.get_sma(sma_period)
+            if direction == 'DOWN':
+                diff_hist = price_hist[price_hist[get_sma_name(sma_pair[0])] < price_hist[get_sma_name(sma_pair[1])]]
+                self.sma_xs[sma_x_name] = get_intersect(diff_hist)
+            elif direction =='UP':
+                diff_hist = price_hist[price_hist[get_sma_name(sma_pair[0])] > price_hist[get_sma_name(sma_pair[1])]]
+                self.sma_xs[sma_x_name] = get_intersect(diff_hist)
+        else:
+            print(f'I already have {sma_x_name} intersects')
 
     def get_pe_ratio(self):
         return self.stock.info['forwardPE']
