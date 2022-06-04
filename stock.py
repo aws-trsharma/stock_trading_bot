@@ -4,7 +4,23 @@ from yfinance import Ticker
 from datetime import date, timedelta, datetime
 from collections import namedtuple, defaultdict
 from dataclasses import dataclass
+from enum import Enum
 
+class Signal(Enum):
+    strong_sell = -3
+    weak_sell = -2
+    idk0 = -1
+    idk1 = 0
+    idk2 = 1
+    weak_buy_ = 2
+    strong_buy_ = 3
+
+class SignalTerm(Enum):
+    short_term = 0
+    mid_term = 1
+    long_term = 2
+
+DIRECTION_MAP = {'DOWN': -1, 'UP': 1}
 #ma_pair_obj = namedtuple('MA_PAIR', ['type', 'fast', 'slow'])
 @dataclass
 class MA_pair:
@@ -39,7 +55,7 @@ class Stock:
         self.stock = Ticker(ticker)
         self.hist = self.stock.history(time_period)
         self.stock_data = pd.DataFrame(self.hist).reset_index(level=0).reset_index(level=0)
-        self.ma_xs = defaultdict(list)
+        self.ma_xs = pd.DataFrame()
         self.period = time_period
         self.period_int = period_int
         self.num_stock = num_stock
@@ -143,17 +159,50 @@ class Stock:
 
     def get_xs_(self, ma_pair, direction):
         ma_x_name = get_ma_x_name(ma_pair, direction)
-        if len(self.ma_xs[ma_x_name]) == 0:
+        if  len(self.ma_xs) == 0 or not (self.ma_xs['name'] == ma_x_name).any():
             print(f'Getting {ma_x_name} intersects')
             self.fetch_ma(ma_pair)
             if direction == 'DOWN':
                 diff_hist = self.stock_data[self.stock_data[ma_pair.get_name('fast')] < self.stock_data[ma_pair.get_name('slow')]]
-                self.ma_xs[ma_x_name] = get_intersect(diff_hist)
+                tmp = get_intersect(diff_hist)
             elif direction =='UP':
-                diff_hist = self.stock_data[self.stock_data[ma_pair.get_name('fast')] < self.stock_data[ma_pair.get_name('slow')]]
-                self.ma_xs[ma_x_name] = get_intersect(diff_hist)
+                diff_hist = self.stock_data[self.stock_data[ma_pair.get_name('fast')] > self.stock_data[ma_pair.get_name('slow')]]
+                tmp = get_intersect(diff_hist)
+            tmp['name'] = ma_x_name
+            tmp['dir'] = direction
+            tmp['fast'] = ma_pair.fast
+            tmp['slow'] = ma_pair.slow
+            self.ma_xs = pd.concat((self.ma_xs, tmp))
         else:
             print(f'I already have {ma_x_name} intersects')
+
+    def cleanup_ma_xs(self):
+        del self.ma_xs
+        self.ma_xs = pd.DataFrame()
+
+    def predict_with_xs(self):
+        long_term = [(MA_pair('EMA', 50, 200), 'DOWN'), (MA_pair('EMA', 50, 200), 'UP')]
+        mid_term = [(MA_pair('EMA', 20, 50), 'DOWN'), (MA_pair('EMA', 20, 50), 'UP')]
+        short_term = [(MA_pair('EMA', 10, 50), 'DOWN'), (MA_pair('EMA', 10, 50), 'UP')]
+        for pair, direction in long_term:
+            self.get_xs_(pair, direction)
+        for pair, direction in mid_term:
+            self.get_xs_(pair, direction)
+        for pair, direction in short_term:
+            self.get_xs_(pair, direction)
+        self.ma_xs['dir'] = self.ma_xs['dir'].map(DIRECTION_MAP)
+        date_today = datetime.now().date()
+        self.ma_xs = self.ma_xs.sort_values(by=['Date'])
+        last_3 = self.ma_xs.iloc[-3:]
+        signal = Signal(last_3['dir'].sum())
+        signal_term = SignalTerm.short_term
+        if signal == Signal.strong_sell or signal == Signal.weak_sell:
+            if 200 in last_3[last_3['dir']==-1]['slow'].values:
+                signal_term = SignalTerm.long_term
+        elif signal == Signal.strong_buy_ or signal == Signal.weak_buy_:
+            if 200 in last_3[last_3['dir']==1]['dir'].values:
+                signal_term = SignalTerm.long_term
+        return signal, signal_term
 
     def get_pe_ratio(self):
         return self.stock.info['forwardPE']
