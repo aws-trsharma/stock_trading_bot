@@ -224,7 +224,7 @@ class Stock:
     def trading_inference_engine(self, buying_power):
         #Facts for KB
         percent_change = self.get_percent_change() >= 0.5 #
-        recommendations = self.get_percent_reccomendations(10) > 0.7
+        recommendations = self.get_percent_reccomendations(10) >= 0.7
         ma_signal= self.predict_with_xs()[0]
         if ma_signal == Signal.strong_buy_ or ma_signal == Signal.weak_buy_:
             moving_average = True
@@ -241,7 +241,7 @@ class Stock:
         ok_perf = (not good_perf) or (not poor_perf)
 
         #Define Actions for KB
-        if (good_perf and invest and buying_power > self.get_total_price(1)):
+        if (good_perf) and (invest) and (buying_power > self.get_partial_price(1)):
             action = Action.BUY
         elif (poor_perf or not invest):
             action = Action.SELL
@@ -252,8 +252,8 @@ class Stock:
 
 
 if __name__ == '__main__':
-    stock = Stock('')
-    print('GOOGL Key Trading Metrics')
+    stock = Stock('SNAP')
+    print('SNAP Key Trading Metrics')
     print('Percent Change', stock.get_percent_change())
     print('Percent Recommendations', stock.get_percent_reccomendations(10))
     print('Moving Averages(Short Term, Long Term)', stock.predict_with_xs())
