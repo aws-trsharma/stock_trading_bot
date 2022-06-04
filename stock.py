@@ -6,6 +6,20 @@ from collections import namedtuple, defaultdict
 from dataclasses import dataclass
 from enum import Enum
 
+class Action(Enum):
+    BUY = 1
+    SELL = -1
+    HOLD = 0
+
+class Signal(Enum):
+    strong_sell = -3
+    weak_sell = -2
+    idk0 = -1
+    idk1 = 0
+    idk2 = 1
+    weak_buy_ = 2
+    strong_buy_ = 3
+
 class Signal(Enum):
     strong_sell = -3
     weak_sell = -2
@@ -90,7 +104,7 @@ class Stock:
 
         start = today - timedelta(self.period_int)
         start_str = start.strftime("%Y-%m-%d")
-        start_price = self.stock_data.loc[start_str, 'Close']
+        start_price = self.stock_data.iloc[-1 - self.period_int].loc['Close']
         percent_change = ((today_price - start_price)/(start_price) * 100)
         return percent_change
 
@@ -207,17 +221,42 @@ class Stock:
     def get_pe_ratio(self):
         return self.stock.info['forwardPE']
 
+    def trading_inference_engine(self, buying_power):
+        #Facts for KB
+        percent_change = self.get_percent_change() >= 0.5 #
+        recommendations = self.get_percent_reccomendations(10) > 0.7
+        ma_signal= self.predict_with_xs()[0]
+        if ma_signal == Signal.strong_buy_ or ma_signal == Signal.weak_buy_:
+            moving_average = True
+        elif ma_signal == Signal.strong_sell or ma_signal == Signal.weak_sell:
+            moving_average = False
+        else:
+            moving_average = False
+        pe_ratio = self.get_pe_ratio() > 20
+        invest = buying_power > 200 #Threshold to determine if it is currently smart for the user to invest or not
+
+        #Define Rules for KB
+        good_perf = (percent_change and recommendations and pe_ratio and moving_average) or (percent_change and recommendations and pe_ratio and not moving_average) 
+        poor_perf = (percent_change and not recommendations and not pe_ratio and not moving_average) or (not percent_change and not recommendations and not moving_average) 
+        ok_perf = (not good_perf) or (not poor_perf)
+
+        #Define Actions for KB
+        if (good_perf and invest and buying_power > self.get_total_price(1)):
+            action = Action.BUY
+        elif (poor_perf or not invest):
+            action = Action.SELL
+        else:
+            action = Action.HOLD
+        
+        return action
+
 
 if __name__ == '__main__':
-    stock = Stock('MSFT')
-    print('Microsoft Key Trading Metrics')
+    stock = Stock('')
+    print('GOOGL Key Trading Metrics')
     print('Percent Change', stock.get_percent_change())
     print('Percent Recommendations', stock.get_percent_reccomendations(10))
-    print('Moving Averages(Short Term, Long Term)', stock.get_moving_averages())
+    print('Moving Averages(Short Term, Long Term)', stock.predict_with_xs())
     print('P/E ratio', stock.get_pe_ratio())
-    print(stock.get_num_stock())
-    print(stock.get_total_price())
-    print(stock.change_num_stock(10, "add"))
-    print(stock.change_num_stock(30, "substract"))
-    print(stock.get_partial_price(5))
+    print('Prediction:', stock.trading_inference_engine(5000))
    
