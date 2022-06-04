@@ -2,15 +2,51 @@ import pandas as pd
 import yfinance as yf
 from yfinance import Ticker
 from datetime import date, timedelta, datetime
+from collections import namedtuple, defaultdict
+from dataclasses import dataclass
+from enum import Enum
 
-# rule_prototyping notebook explains the logic here
+class Signal(Enum):
+    strong_sell = -3
+    weak_sell = -2
+    idk0 = -1
+    idk1 = 0
+    idk2 = 1
+    weak_buy_ = 2
+    strong_buy_ = 3
+
+class SignalTerm(Enum):
+    short_term = 0
+    mid_term = 1
+    long_term = 2
+
+DIRECTION_MAP = {'DOWN': -1, 'UP': 1}
+#ma_pair_obj = namedtuple('MA_PAIR', ['type', 'fast', 'slow'])
+@dataclass
+class MA_pair:
+    type: str
+    fast: int
+    slow: int
+
+    def get_name(self, period):
+        if period == 'slow':
+            return f'{self.type.upper()}_{self.slow}'
+        elif period == 'fast':
+            return f'{self.type.upper()}_{self.fast}'
+        else:
+            print('Arg has to be slow/fast.')
+
+# we already have the rows where the faster sma is lower than the faster sma
+# we now want to get the first non-consecutive occurence of the intersect
+# in other words we don't want the whole time period where one sma < other sma, we only want the first days to know when it started
 def get_intersect(diff_hist):
     diff_group = (diff_hist['index'] != diff_hist.shift()['index']+ 1).cumsum().rename('group')
     return diff_hist.groupby([diff_group], as_index=False).first()
 
 # get the name to store the sma intersect data
-def get_sma_x_name(sma_pair, direction):
-    return f'X_SMA_{sma_pair[0]}_{sma_pair[1]}_{direction}'
+# ma_pair = ['SMA_50', 'SMA_200']
+def get_ma_x_name(ma_pair, direction):
+    return f'X_{ma_pair.type.upper()}_{ma_pair.fast}_{ma_pair.slow}_{direction.upper()}'
 
 
 class Stock:
@@ -18,10 +54,12 @@ class Stock:
     def __init__(self, ticker, num_stock = 10, time_period='12mo', period_int = 5):
         self.stock = Ticker(ticker)
         self.hist = self.stock.history(time_period)
-        self.stock_data = pd.DataFrame(self.hist)
+        self.stock_data = pd.DataFrame(self.hist).reset_index(level=0).reset_index(level=0)
+        self.ma_xs = pd.DataFrame()
         self.period = time_period
         self.period_int = period_int
         self.num_stock = num_stock
+
 
     def get_partial_price(self, amount):
         return self.stock.info['regularMarketPrice'] * amount
@@ -107,23 +145,64 @@ class Stock:
         else:
             print(f'I already have {t} day EMA.')
 
-    def get_intersects(self, one):
-        pass
-#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
-    def get_sma_xs_(self, sma_pair, direction):
-        sma_x_name = get_sma_x_name(sma_pair, direction)
-        if not self.sma_xs.get(sma_x_name):
-            print(f'Getting {sma_x_name} intersects')
-            for sma_period in sma_pair:
-                self.get_sma(sma_period)
-            if direction == 'DOWN':
-                diff_hist = price_hist[price_hist[get_sma_name(sma_pair[0])] < price_hist[get_sma_name(sma_pair[1])]]
-                self.sma_xs[sma_x_name] = get_intersect(diff_hist)
-            elif direction =='UP':
-                diff_hist = price_hist[price_hist[get_sma_name(sma_pair[0])] > price_hist[get_sma_name(sma_pair[1])]]
-                self.sma_xs[sma_x_name] = get_intersect(diff_hist)
+    def fetch_ma(self, ma_pair):
+        if ma_pair.type == 'SMA':
+            self.get_sma_(ma_pair.fast)
+            self.get_sma_(ma_pair.slow)
+        elif ma_pair.type == 'CMA':
+            self.get_cma_()
+        elif ma_pair.type == 'EMA':
+            self.get_ema_(ma_pair.fast)
+            self.get_ema_(ma_pair.slow)
         else:
-            print(f'I already have {sma_x_name} intersects')
+            print('MA_PAIR type has to be one of SMA, CMA or EMA.')
+
+    def get_xs_(self, ma_pair, direction):
+        ma_x_name = get_ma_x_name(ma_pair, direction)
+        if  len(self.ma_xs) == 0 or not (self.ma_xs['name'] == ma_x_name).any():
+            print(f'Getting {ma_x_name} intersects')
+            self.fetch_ma(ma_pair)
+            if direction == 'DOWN':
+                diff_hist = self.stock_data[self.stock_data[ma_pair.get_name('fast')] < self.stock_data[ma_pair.get_name('slow')]]
+                tmp = get_intersect(diff_hist)
+            elif direction =='UP':
+                diff_hist = self.stock_data[self.stock_data[ma_pair.get_name('fast')] > self.stock_data[ma_pair.get_name('slow')]]
+                tmp = get_intersect(diff_hist)
+            tmp['name'] = ma_x_name
+            tmp['dir'] = direction
+            tmp['fast'] = ma_pair.fast
+            tmp['slow'] = ma_pair.slow
+            self.ma_xs = pd.concat((self.ma_xs, tmp))
+        else:
+            print(f'I already have {ma_x_name} intersects')
+
+    def cleanup_ma_xs(self):
+        del self.ma_xs
+        self.ma_xs = pd.DataFrame()
+
+    def predict_with_xs(self):
+        long_term = [(MA_pair('EMA', 50, 200), 'DOWN'), (MA_pair('EMA', 50, 200), 'UP')]
+        mid_term = [(MA_pair('EMA', 20, 50), 'DOWN'), (MA_pair('EMA', 20, 50), 'UP')]
+        short_term = [(MA_pair('EMA', 10, 50), 'DOWN'), (MA_pair('EMA', 10, 50), 'UP')]
+        for pair, direction in long_term:
+            self.get_xs_(pair, direction)
+        for pair, direction in mid_term:
+            self.get_xs_(pair, direction)
+        for pair, direction in short_term:
+            self.get_xs_(pair, direction)
+        self.ma_xs['dir'] = self.ma_xs['dir'].map(DIRECTION_MAP)
+        date_today = datetime.now().date()
+        self.ma_xs = self.ma_xs.sort_values(by=['Date'])
+        last_3 = self.ma_xs.iloc[-3:]
+        signal = Signal(last_3['dir'].sum())
+        signal_term = SignalTerm.short_term
+        if signal == Signal.strong_sell or signal == Signal.weak_sell:
+            if 200 in last_3[last_3['dir']==-1]['slow'].values:
+                signal_term = SignalTerm.long_term
+        elif signal == Signal.strong_buy_ or signal == Signal.weak_buy_:
+            if 200 in last_3[last_3['dir']==1]['dir'].values:
+                signal_term = SignalTerm.long_term
+        return signal, signal_term
 
     def get_pe_ratio(self):
         return self.stock.info['forwardPE']
