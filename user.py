@@ -17,7 +17,7 @@ class User:
         return self.buying_power
 
     def get_stocks(self):
-        return self.stocks
+        return self.stocks.keys()
 
     def get_level(self):
         return self.level
@@ -51,7 +51,8 @@ class User:
                 self.stocks[stock_ticker].change_num_stock(stock_amount, "add")
             else:
                 self.stocks[stock_ticker] = Stock(stock_ticker, stock_amount)
-                print(self.stocks[stock_ticker].get_num_stock())
+                #print(self.stocks[stock_ticker].get_num_stock())
+            print("The stock has been added to your portfolio")
             return True
         else:
             print("Stock cannot be added due to insufficient funds")
@@ -84,5 +85,14 @@ class User:
             tot_amount += self.stocks[key].get_total_price()
         self.stocks = {}
         self.update_buying_power(tot_amount, 'add')
+
+    def get_reccomendation(self, ticker, invest):
+        if invest > self.buying_power:
+            print("Potential investment is more than current buying power")
+            return False
+        temp = Stock(ticker)
+        print('Prediction:', temp.trading_inference_engine(invest))
+
+            
 
     
