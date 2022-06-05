@@ -8,7 +8,7 @@ def user_options(user):
         print("(b) Check current stocks in your portfolio")
         print("(c) Buy stocks")
         print("(d) Sell stocks")
-        print("(e) Get reccomendation for stock")
+        print("(e) Get recommendation for stock")
         print("(f) Update buying power")
         print("(g) Clear all stocks")
         print("(h) Quit")
