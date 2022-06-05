@@ -17,7 +17,7 @@ class User:
         return self.buying_power
 
     def get_stocks(self):
-        return self.stocks.keys()
+        return self.stocks
 
     def get_level(self):
         return self.level
@@ -45,6 +45,9 @@ class User:
         Appends User Stock Dictionary if User conducts a buy
         """
         stock = Ticker(stock_ticker)
+        if not stock.info['regularMarketPrice']:
+            print("Not a valid stock:", stock_ticker)
+            return False
         stock_price = stock.info['regularMarketPrice'] * stock_amount
         if(self.update_buying_power(stock_price, 'subtract')):
             if(stock_ticker in self.stocks):
@@ -52,7 +55,7 @@ class User:
             else:
                 self.stocks[stock_ticker] = Stock(stock_ticker, stock_amount)
                 #print(self.stocks[stock_ticker].get_num_stock())
-            print("The stock has been added to your portfolio")
+            print(stock_amount, "stock(s) of", stock_ticker, "added to your portfolio")
             return True
         else:
             print("Stock cannot be added due to insufficient funds")
@@ -65,10 +68,11 @@ class User:
         Updates user stock entry if user conducts a sell
         """
         if stock_ticker not in self.stocks:
-            print("Do not have that stock")
+            print(stock_ticker, "was not found in your portfolio.")
             return False
         if stock_amount > self.stocks[stock_ticker].get_num_stock():
-            print("Not enough stocks")
+            print("Cannot remove", stock_amount, "stock(s) of", stock_ticker, 
+                ": only", self.stocks[stock_ticker].get_num_stock(), "found in your portfolio.")
             return False
         price = self.stocks[stock_ticker].get_partial_price(stock_amount)
         
@@ -91,6 +95,9 @@ class User:
             print("Potential investment is more than current buying power")
             return False
         temp = Stock(ticker)
+        if temp.stock.info['regularMarketPrice'] is None:
+            print("Not a valid stock:", ticker)
+            return False
         print('Prediction:', temp.trading_inference_engine(invest))
 
             
