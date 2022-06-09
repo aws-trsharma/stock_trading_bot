@@ -98,7 +98,7 @@ class User:
         if temp.stock.info['regularMarketPrice'] is None:
             print("Not a valid stock:", ticker)
             return False
-        print('Prediction:', temp.trading_inference_engine(invest))
+        print('Prediction:', temp.trading_inference_engine(self.get_buying_power()))
 
             
 

@@ -65,7 +65,7 @@ def get_ma_x_name(ma_pair, direction):
 
 class Stock:
 
-    def __init__(self, ticker, num_stock = 10, time_period='12mo', period_int = 5):
+    def __init__(self, ticker, num_stock = 10, time_period='12mo', period_int = 7):
         self.stock = Ticker(ticker)
         self.hist = self.stock.history(time_period)
         self.stock_data = pd.DataFrame(self.hist).reset_index(level=0).reset_index(level=0)
@@ -252,8 +252,8 @@ class Stock:
 
 
 if __name__ == '__main__':
-    stock = Stock('SNAP')
-    print('SNAP Key Trading Metrics')
+    stock = Stock('NIO')
+    print('NIO Key Trading Metrics')
     print('Percent Change', stock.get_percent_change())
     print('Percent Recommendations', stock.get_percent_reccomendations(10))
     print('Moving Averages(Short Term, Long Term)', stock.predict_with_xs())
